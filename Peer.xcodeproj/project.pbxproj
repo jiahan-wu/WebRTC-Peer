@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5264511F2DAD57DF00BCCAAB /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 5264511E2DAD57DF00BCCAAB /* WebRTC */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		524B3D102DABFD60006789E0 /* Peer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Peer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -36,6 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5264511F2DAD57DF00BCCAAB /* WebRTC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +83,7 @@
 			);
 			name = Peer;
 			packageProductDependencies = (
+				5264511E2DAD57DF00BCCAAB /* WebRTC */,
 			);
 			productName = Peer;
 			productReference = 524B3D102DABFD60006789E0 /* Peer.app */;
@@ -107,6 +113,9 @@
 			);
 			mainGroup = 524B3D072DABFD60006789E0;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5264511D2DAD57DF00BCCAAB /* XCRemoteSwiftPackageReference "WebRTC" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 524B3D112DABFD60006789E0 /* Products */;
 			projectDirPath = "";
@@ -335,6 +344,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5264511D2DAD57DF00BCCAAB /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 135.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5264511E2DAD57DF00BCCAAB /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5264511D2DAD57DF00BCCAAB /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 524B3D082DABFD60006789E0 /* Project object */;
 }
