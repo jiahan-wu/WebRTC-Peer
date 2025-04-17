@@ -42,17 +42,19 @@ class ViewController: UIViewController {
         optionalConstraints: nil
     )
     
-    private var audioSource: RTCAudioSource?
-    
     private var audioTrack: RTCAudioTrack?
+    
+    private var videoTrack: RTCVideoTrack?
+    
+    private var cameraVideoCapturer: RTCCameraVideoCapturer?
     
     // MARK: View Lifecycle
     
     override func viewDidLoad() {
         super.viewDidLoad()
         configureAudioSession()
-        configureAudioSource()
         configureAudioTrack()
+        configureVideoTrack()
     }
     
     // MARK: Setup Methods
@@ -63,6 +65,7 @@ class ViewController: UIViewController {
         
         do {
             let configuration = RTCAudioSessionConfiguration.webRTC()
+            configuration.categoryOptions = [.defaultToSpeaker]
             
             audioSession.lockForConfiguration()
             try audioSession.setConfiguration(configuration, active: true)
@@ -72,19 +75,23 @@ class ViewController: UIViewController {
         }
     }
     
-    func configureAudioSource() {
-        audioSource = factory.audioSource(with: mediaConstraints)
-    }
-    
-    func configureAudioTrack() {
-        guard let audioSource = audioSource else {
-            print("Failed to configure audio track: audioSource is nil")
-            return
-        }
+    private func configureAudioTrack() {
+        let audioSource = factory.audioSource(with: mediaConstraints)
         
         audioTrack = factory.audioTrack(
             with: audioSource,
-            trackId: "audio0"
+            trackId: ""
+        )
+    }
+    
+    private func configureVideoTrack() {
+        let videoSource = factory.videoSource()
+        
+        cameraVideoCapturer = RTCCameraVideoCapturer(delegate: videoSource)
+        
+        videoTrack = factory.videoTrack(
+            with: videoSource,
+            trackId: ""
         )
     }
     
@@ -147,7 +154,11 @@ class ViewController: UIViewController {
         }
         
         if let audioTrack {
-            peerConnection.add(audioTrack, streamIds: ["stream0"])
+            peerConnection.add(audioTrack, streamIds: ["localStream"])
+        }
+        
+        if let videoTrack {
+            peerConnection.add(videoTrack, streamIds: ["localStream"])
         }
         
         do {
@@ -193,7 +204,11 @@ class ViewController: UIViewController {
         }
         
         if let audioTrack {
-            peerConnection.add(audioTrack, streamIds: ["stream0"])
+            peerConnection.add(audioTrack, streamIds: ["localStream"])
+        }
+        
+        if let videoTrack {
+            peerConnection.add(videoTrack, streamIds: ["localStream"])
         }
         
         let remoteDescription =  RTCSessionDescription(
