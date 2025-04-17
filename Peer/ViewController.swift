@@ -37,15 +37,55 @@ class ViewController: UIViewController {
         )
     }()
     
-    let mediaConstraints = RTCMediaConstraints(
+    private let mediaConstraints = RTCMediaConstraints(
         mandatoryConstraints: nil,
         optionalConstraints: nil
     )
+    
+    private var audioSource: RTCAudioSource?
+    
+    private var audioTrack: RTCAudioTrack?
     
     // MARK: View Lifecycle
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        configureAudioSession()
+        configureAudioSource()
+        configureAudioTrack()
+    }
+    
+    // MARK: Setup Methods
+    
+    private func configureAudioSession() {
+        let audioSession = RTCAudioSession.sharedInstance()
+        audioSession.add(self)
+        
+        do {
+            let configuration = RTCAudioSessionConfiguration.webRTC()
+            
+            audioSession.lockForConfiguration()
+            try audioSession.setConfiguration(configuration, active: true)
+            audioSession.unlockForConfiguration()
+        } catch {
+            print("Failed to configure audio session: \(error)")
+        }
+    }
+    
+    func configureAudioSource() {
+        audioSource = factory.audioSource(with: mediaConstraints)
+    }
+    
+    func configureAudioTrack() {
+        guard let audioSource = audioSource else {
+            print("Failed to configure audio track: audioSource is nil")
+            return
+        }
+        
+        audioTrack = factory.audioTrack(
+            with: audioSource,
+            trackId: "audio0"
+        )
     }
     
     // MARK: UI Actions
@@ -106,6 +146,10 @@ class ViewController: UIViewController {
             return
         }
         
+        if let audioTrack {
+            peerConnection.add(audioTrack, streamIds: ["stream0"])
+        }
+        
         do {
             let offer = try await peerConnection.offer(for: mediaConstraints)
             
@@ -146,6 +190,10 @@ class ViewController: UIViewController {
         guard let peerConnection = createPeerConnection() else {
             print("Failed to create peer connection.")
             return
+        }
+        
+        if let audioTrack {
+            peerConnection.add(audioTrack, streamIds: ["stream0"])
         }
         
         let remoteDescription =  RTCSessionDescription(
@@ -268,6 +316,10 @@ class ViewController: UIViewController {
     }
     
 }
+
+// MARK: RTCAudioSessionDelegate
+
+extension ViewController: RTCAudioSessionDelegate {}
 
 // MARK: WebSocketClientDelegate
 
