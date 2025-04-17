@@ -16,11 +16,9 @@ class ViewController: UIViewController {
     
     @IBOutlet weak var connectButton: UIButton!
     
-    // MARK: Signaling Properties
+    // MARK: Properties
     
     private var webSocketClient: WebSocketClient?
-    
-    // MARK: JSON Properties
     
     private let jsonDecoder = JSONDecoder()
     
@@ -39,13 +37,18 @@ class ViewController: UIViewController {
         )
     }()
     
+    let mediaConstraints = RTCMediaConstraints(
+        mandatoryConstraints: nil,
+        optionalConstraints: nil
+    )
+    
     // MARK: View Lifecycle
     
     override func viewDidLoad() {
         super.viewDidLoad()
     }
     
-    // MARK: Methods
+    // MARK: UI Actions
     
     @IBAction func handleUserIdentifierTextFieldChanged(_ sender: UITextField) {
         connectButton.isEnabled = !(sender.text?.isEmpty ?? true)
@@ -62,6 +65,8 @@ class ViewController: UIViewController {
             disconnect()
         }
     }
+    
+    // MARK: WebSocket Methods
     
     private func connect() {
         let url = URL(string: "wss://52bb-2407-4d00-4c00-1976-29d5-5c83-699b-a5e9.ngrok-free.app/signals")!
@@ -85,6 +90,8 @@ class ViewController: UIViewController {
         webSocketClient = nil
     }
     
+    // MARK: Event Handlers
+    
     private func handle(_ userJoinedEvent: Event.UserJoinedEvent) async {
         guard userJoinedEvent.userId != userIdTextField.text else {
             return
@@ -94,35 +101,7 @@ class ViewController: UIViewController {
             oldPeerConnection.close()
         }
         
-        let configuration = RTCConfiguration()
-        let iceServers = [
-            "stun:stun.l.google.com:19302",
-            "stun:stun1.l.google.com:19302",
-            "stun:stun2.l.google.com:19302",
-            "stun:stun3.l.google.com:19302",
-            "stun:stun4.l.google.com:19302",
-        ]
-        configuration.iceServers = [RTCIceServer(urlStrings: iceServers)]
-        configuration.sdpSemantics = .unifiedPlan
-        configuration.continualGatheringPolicy = .gatherContinually
-        
-        
-        //            let mandatoryConstraints = [
-        //                kRTCMediaConstraintsIceRestart: kRTCMediaConstraintsValueTrue,
-        //                kRTCMediaConstraintsOfferToReceiveAudio: kRTCMediaConstraintsValueTrue,
-        //                kRTCMediaConstraintsOfferToReceiveVideo: kRTCMediaConstraintsValueTrue,
-        //                kRTCMediaConstraintsVoiceActivityDetection: kRTCMediaConstraintsValueTrue,
-        //            ]
-        let mediaConstraints = RTCMediaConstraints(
-            mandatoryConstraints: nil,
-            optionalConstraints: nil
-        )
-        
-        guard let peerConnection = factory.peerConnection(
-            with: configuration,
-            constraints: mediaConstraints,
-            delegate: self
-        ) else {
+        guard let peerConnection = createPeerConnection() else {
             print("Failed to create peer connection.")
             return
         }
@@ -164,35 +143,7 @@ class ViewController: UIViewController {
             oldPeerConnection.close()
         }
         
-        let configuration = RTCConfiguration()
-        let iceServers = [
-            "stun:stun.l.google.com:19302",
-            "stun:stun1.l.google.com:19302",
-            "stun:stun2.l.google.com:19302",
-            "stun:stun3.l.google.com:19302",
-            "stun:stun4.l.google.com:19302",
-        ]
-        configuration.iceServers = [RTCIceServer(urlStrings: iceServers)]
-        configuration.sdpSemantics = .unifiedPlan
-        configuration.continualGatheringPolicy = .gatherContinually
-        
-        
-        //            let mandatoryConstraints = [
-        //                kRTCMediaConstraintsIceRestart: kRTCMediaConstraintsValueTrue,
-        //                kRTCMediaConstraintsOfferToReceiveAudio: kRTCMediaConstraintsValueTrue,
-        //                kRTCMediaConstraintsOfferToReceiveVideo: kRTCMediaConstraintsValueTrue,
-        //                kRTCMediaConstraintsVoiceActivityDetection: kRTCMediaConstraintsValueTrue,
-        //            ]
-        let mediaConstraints = RTCMediaConstraints(
-            mandatoryConstraints: nil,
-            optionalConstraints: nil
-        )
-        
-        guard let peerConnection = factory.peerConnection(
-            with: configuration,
-            constraints: mediaConstraints,
-            delegate: self
-        ) else {
+        guard let peerConnection = createPeerConnection() else {
             print("Failed to create peer connection.")
             return
         }
@@ -294,7 +245,31 @@ class ViewController: UIViewController {
         peerConnection.remove(iceCandidates)
     }
     
+    // MARK: WebRTC Helper Methods
+    
+    private func createPeerConnection() -> RTCPeerConnection? {
+        let configuration = RTCConfiguration()
+        let iceServers = [
+            "stun:stun.l.google.com:19302",
+            "stun:stun1.l.google.com:19302",
+            "stun:stun2.l.google.com:19302",
+            "stun:stun3.l.google.com:19302",
+            "stun:stun4.l.google.com:19302",
+        ]
+        configuration.iceServers = [RTCIceServer(urlStrings: iceServers)]
+        configuration.sdpSemantics = .unifiedPlan
+        configuration.continualGatheringPolicy = .gatherContinually
+        
+        return factory.peerConnection(
+            with: configuration,
+            constraints: mediaConstraints,
+            delegate: self
+        )
+    }
+    
 }
+
+// MARK: WebSocketClientDelegate
 
 extension ViewController: WebSocketClientDelegate {
     
@@ -345,6 +320,8 @@ extension ViewController: WebSocketClientDelegate {
     
 }
 
+// MARK: RTCPeerConnectionDelegate
+
 extension ViewController: RTCPeerConnectionDelegate {
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {
@@ -373,62 +350,64 @@ extension ViewController: RTCPeerConnectionDelegate {
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {
         print("peerConnection didGenerate candidate: \(candidate)")
-        let from = userIdTextField.text ?? ""
-        let userIds = peerConnectionsByUserId.keys
-        let iceCandidate = Event.ICECandidate(
-            sdp: candidate.sdp,
-            sdpMLineIndex: candidate.sdpMLineIndex,
-            sdpMid: candidate.sdpMid
-        )
-        for to in userIds {
-            let iceCandidateGeneratedEvent = Event.ICECandidateGeneratedEvent(
-                iceCandidate: iceCandidate,
-                from: from,
-                to: to
+        
+        Task { @MainActor in
+            let from = userIdTextField.text ?? ""
+            let userIds = peerConnectionsByUserId.keys
+            let iceCandidate = Event.ICECandidate(
+                sdp: candidate.sdp,
+                sdpMLineIndex: candidate.sdpMLineIndex,
+                sdpMid: candidate.sdpMid
             )
-            do {
-                let iceCandidateGeneratedEventJSONData = try jsonEncoder.encode(iceCandidateGeneratedEvent)
-                Task {
+            for to in userIds {
+                let iceCandidateGeneratedEvent = Event.ICECandidateGeneratedEvent(
+                    iceCandidate: iceCandidate,
+                    from: from,
+                    to: to
+                )
+                do {
+                    let iceCandidateGeneratedEventJSONData = try jsonEncoder.encode(iceCandidateGeneratedEvent)
                     do {
                         try await webSocketClient?.send(iceCandidateGeneratedEventJSONData)
                     } catch {
                         print("Failed to send iceCandidateGeneratedEventJSONData: \(error)")
                     }
+                } catch {
+                    print("Failed to encode iceCandidateGeneratedEventJSONData: \(error)")
                 }
-            } catch {
-                print("Failed to encode iceCandidateGeneratedEventJSONData: \(error)")
             }
         }
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {
         print("peerConnection didRemove candidates: \(candidates)")
-        let from = userIdTextField.text ?? ""
-        let userIds = peerConnectionsByUserId.keys
-        let iceCandidates = candidates.map {
-            Event.ICECandidate(
-                sdp: $0.sdp,
-                sdpMLineIndex: $0.sdpMLineIndex,
-                sdpMid: $0.sdpMid
-            )
-        }
-        for to in userIds {
-            let iceCandidatesRemovedEvent = Event.ICECandidatesRemovedEvent(
-                iceCandidates: iceCandidates,
-                from: from,
-                to: to
-            )
-            do {
-                let iceCandidatesRemovedEventJSONData = try jsonEncoder.encode(iceCandidatesRemovedEvent)
-                Task {
+        
+        Task { @MainActor in
+            let from = userIdTextField.text ?? ""
+            let userIds = peerConnectionsByUserId.keys
+            let iceCandidates = candidates.map {
+                Event.ICECandidate(
+                    sdp: $0.sdp,
+                    sdpMLineIndex: $0.sdpMLineIndex,
+                    sdpMid: $0.sdpMid
+                )
+            }
+            for to in userIds {
+                let iceCandidatesRemovedEvent = Event.ICECandidatesRemovedEvent(
+                    iceCandidates: iceCandidates,
+                    from: from,
+                    to: to
+                )
+                do {
+                    let iceCandidatesRemovedEventJSONData = try jsonEncoder.encode(iceCandidatesRemovedEvent)
                     do {
                         try await webSocketClient?.send(iceCandidatesRemovedEventJSONData)
                     } catch {
                         print("Failed to send iceCandidatesRemovedEventJSONData: \(error)")
                     }
+                } catch {
+                    print("Failed to encode iceCandidatesRemovedEventJSONData: \(error)")
                 }
-            } catch {
-                print("Failed to encode iceCandidatesRemovedEventJSONData: \(error)")
             }
         }
     }
