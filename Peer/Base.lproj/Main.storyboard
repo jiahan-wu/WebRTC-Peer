@@ -2,6 +2,7 @@
 <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23504" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="BYZ-38-t0r">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
+        <deployment identifier="iOS"/>
         <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23506"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="Stack View standard spacing" minToolsVersion="9.0"/>
@@ -49,6 +50,7 @@
                     </view>
                     <connections>
                         <outlet property="connectButton" destination="Eka-Q5-r3h" id="e3W-em-3Ls"/>
+                        <outlet property="stackView" destination="prc-d5-Hag" id="sVH-zX-tnQ"/>
                         <outlet property="userIdTextField" destination="El9-oa-tde" id="aSm-Zq-7FN"/>
                     </connections>
                 </viewController>

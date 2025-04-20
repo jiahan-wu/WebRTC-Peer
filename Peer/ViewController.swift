@@ -6,15 +6,21 @@
 //
 
 import UIKit
-import WebRTC
+@preconcurrency import WebRTC
 
 class ViewController: UIViewController {
     
     // MARK: UI Elements
     
-    @IBOutlet weak var userIdTextField: UITextField!
+    @IBOutlet private weak var stackView: UIStackView!
     
-    @IBOutlet weak var connectButton: UIButton!
+    @IBOutlet private weak var userIdTextField: UITextField!
+    
+    @IBOutlet private weak var connectButton: UIButton!
+    
+    private var collectionView: UICollectionView!
+    
+    private var collectionViewDataSource: UICollectionViewDiffableDataSource<String, RTCVideoTrack>!
     
     // MARK: Properties
     
@@ -26,16 +32,11 @@ class ViewController: UIViewController {
     
     // MARK: WebRTC Properties
     
+    private let streamId = UUID().uuidString
+    
     private var peerConnectionsByUserId = [String: RTCPeerConnection]()
     
-    private let factory: RTCPeerConnectionFactory = {
-        let videoEncoderFactory = RTCDefaultVideoEncoderFactory()
-        let videoDecoderFactory = RTCDefaultVideoDecoderFactory()
-        return RTCPeerConnectionFactory(
-            encoderFactory: videoEncoderFactory,
-            decoderFactory: videoDecoderFactory
-        )
-    }()
+    private let factory = RTCPeerConnectionFactory()
     
     private let mediaConstraints = RTCMediaConstraints(
         mandatoryConstraints: nil,
@@ -48,16 +49,64 @@ class ViewController: UIViewController {
     
     private var cameraVideoCapturer: RTCCameraVideoCapturer?
     
+    private var mediaStream: RTCMediaStream?
+    
     // MARK: View Lifecycle
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        configureCollectionView()
+        configureCollectionViewDataSource()
         configureAudioSession()
         configureAudioTrack()
         configureVideoTrack()
+        configureMediaStream()
     }
     
     // MARK: Setup Methods
+    
+    private func configureCollectionView() {
+        let itemSize = NSCollectionLayoutSize(widthDimension: .fractionalWidth(0.5),
+                                              heightDimension: .fractionalWidth(0.5))
+        let item = NSCollectionLayoutItem(layoutSize: itemSize)
+        
+        let groupSize = NSCollectionLayoutSize(widthDimension: .fractionalWidth(1.0),
+                                               heightDimension: .estimated(150))
+        let group = NSCollectionLayoutGroup.horizontal(layoutSize: groupSize, subitems: [item])
+        let spacing = CGFloat(8)
+        group.interItemSpacing = .fixed(spacing)
+        
+        let section = NSCollectionLayoutSection(group: group)
+        section.interGroupSpacing = spacing
+        section.contentInsets = NSDirectionalEdgeInsets(top: 32, leading: 32, bottom: 32, trailing: 32)
+        
+        let layout = UICollectionViewCompositionalLayout(section: section)
+        
+        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        collectionView.translatesAutoresizingMaskIntoConstraints = false
+        
+        view.addSubview(collectionView)
+        
+        NSLayoutConstraint.activate(
+            [
+                collectionView.topAnchor.constraint(equalTo: stackView.bottomAnchor),
+                collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+                collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            ]
+        )
+    }
+    
+    private func configureCollectionViewDataSource() {
+        let cellRegistration = UICollectionView.CellRegistration<MTLVideoCollectionViewCell, RTCVideoTrack> { cell, indexPath, videoTrack in
+            cell.render(videoTrack)
+            cell.backgroundColor =  .systemGray
+        }
+        
+        collectionViewDataSource = UICollectionViewDiffableDataSource(collectionView: collectionView) { collectionView, indexPath, videoTrack in
+            return collectionView.dequeueConfiguredReusableCell(using: cellRegistration, for: indexPath, item: videoTrack)
+        }
+    }
     
     private func configureAudioSession() {
         let audioSession = RTCAudioSession.sharedInstance()
@@ -80,7 +129,7 @@ class ViewController: UIViewController {
         
         audioTrack = factory.audioTrack(
             with: audioSource,
-            trackId: ""
+            trackId: "localAudioTrack0"
         )
     }
     
@@ -91,8 +140,24 @@ class ViewController: UIViewController {
         
         videoTrack = factory.videoTrack(
             with: videoSource,
-            trackId: ""
+            trackId: "localVideoTrack0"
         )
+    }
+    
+    private func configureMediaStream() {
+        mediaStream = factory.mediaStream(withStreamId: streamId)
+        
+        if let audioTrack {
+            mediaStream?.addAudioTrack(audioTrack)
+        } else {
+            print("No audio track configured.")
+        }
+        
+        if let videoTrack {
+            mediaStream?.addVideoTrack(videoTrack)
+        } else {
+            print("No video track configured.")
+        }
     }
     
     // MARK: UI Actions
@@ -116,7 +181,7 @@ class ViewController: UIViewController {
     // MARK: WebSocket Methods
     
     private func connect() {
-        let url = URL(string: "wss://52bb-2407-4d00-4c00-1976-29d5-5c83-699b-a5e9.ngrok-free.app/signals")!
+        let url = URL(string: "wss://27bc-2407-4d00-4c00-1976-50ba-4131-75f0-480f.ngrok-free.app/signals")!
         webSocketClient = WebSocketClient(url: url)
         webSocketClient?.delegate = self
         webSocketClient?.connect()
@@ -153,12 +218,11 @@ class ViewController: UIViewController {
             return
         }
         
-        if let audioTrack {
-            peerConnection.add(audioTrack, streamIds: ["localStream"])
-        }
-        
-        if let videoTrack {
-            peerConnection.add(videoTrack, streamIds: ["localStream"])
+        if let mediaStream {
+            mediaStream.audioTracks.forEach { peerConnection.add($0, streamIds: [streamId]) }
+            mediaStream.videoTracks.forEach { peerConnection.add($0, streamIds: [streamId]) }
+        } else {
+            print("No media stream to add to peer connection.")
         }
         
         do {
@@ -203,12 +267,11 @@ class ViewController: UIViewController {
             return
         }
         
-        if let audioTrack {
-            peerConnection.add(audioTrack, streamIds: ["localStream"])
-        }
-        
-        if let videoTrack {
-            peerConnection.add(videoTrack, streamIds: ["localStream"])
+        if let mediaStream {
+            mediaStream.audioTracks.forEach { peerConnection.add($0, streamIds: [streamId]) }
+            mediaStream.videoTracks.forEach { peerConnection.add($0, streamIds: [streamId]) }
+        } else {
+            print("No media stream to add to peer connection.")
         }
         
         let remoteDescription =  RTCSessionDescription(
@@ -250,6 +313,10 @@ class ViewController: UIViewController {
     }
     
     func handle(_ answerEvent: Event.AnswerEvent) async {
+        guard answerEvent.to == userIdTextField.text else {
+            return
+        }
+        
         guard let peerConnection = peerConnectionsByUserId[answerEvent.from] else {
             return
         }
@@ -320,8 +387,6 @@ class ViewController: UIViewController {
             "stun:stun4.l.google.com:19302",
         ]
         configuration.iceServers = [RTCIceServer(urlStrings: iceServers)]
-        configuration.sdpSemantics = .unifiedPlan
-        configuration.continualGatheringPolicy = .gatherContinually
         
         return factory.peerConnection(
             with: configuration,
@@ -391,24 +456,12 @@ extension ViewController: WebSocketClientDelegate {
 
 extension ViewController: RTCPeerConnectionDelegate {
     
+    func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {
+        print("peerConnectionShouldNegotiate")
+    }
+    
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {
         print("peerConnection didChange stateChanged: \(stateChanged)")
-    }
-    
-    func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
-        print("peerConnection didAdd stream: \(stream)")
-    }
-    
-    func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {
-        print("peerConnection didRemove stream: \(stream)")
-    }
-    
-    func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {
-        print("peerConnection shouldNegotiate")
-    }
-    
-    func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
-        print("peerConnection didChange newState: \(newState)")
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {
@@ -416,8 +469,8 @@ extension ViewController: RTCPeerConnectionDelegate {
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {
-        print("peerConnection didGenerate candidate: \(candidate)")
-        
+        //        print("peerConnection didGenerate candidate: \(candidate)")
+        print("peerConnection didGenerate candidate")
         Task { @MainActor in
             let from = userIdTextField.text ?? ""
             let userIds = peerConnectionsByUserId.keys
@@ -448,7 +501,6 @@ extension ViewController: RTCPeerConnectionDelegate {
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {
         print("peerConnection didRemove candidates: \(candidates)")
-        
         Task { @MainActor in
             let from = userIdTextField.text ?? ""
             let userIds = peerConnectionsByUserId.keys
@@ -477,6 +529,57 @@ extension ViewController: RTCPeerConnectionDelegate {
                 }
             }
         }
+    }
+    
+    func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
+        print("peerConnection didChange newState: \(newState)")
+    }
+    
+    func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
+        print("peerConnection didAdd stream: \(stream)")
+       
+        Task { @MainActor in
+            let transceivers = peerConnectionsByUserId.values.reduce([], { $0 + $1.transceivers })
+            
+            let videoTracks = transceivers.compactMap { transceiver -> RTCVideoTrack? in
+                guard transceiver.mediaType == .video else {
+                    return nil
+                }
+                return transceiver.receiver.track as? RTCVideoTrack
+            }
+            
+            var snapshot = NSDiffableDataSourceSnapshot<String, RTCVideoTrack>()
+            snapshot.appendSections(["videos"])
+            snapshot.appendItems(videoTracks)
+            
+            collectionViewDataSource.apply(snapshot)
+        }
+        
+        guard let frontCamera = (RTCCameraVideoCapturer.captureDevices().first { $0.position == .front }),
+              let format = (RTCCameraVideoCapturer.supportedFormats(for: frontCamera).sorted { (f1, f2) -> Bool in
+                  let width1 = CMVideoFormatDescriptionGetDimensions(f1.formatDescription).width
+                  let width2 = CMVideoFormatDescriptionGetDimensions(f2.formatDescription).width
+                  return width1 < width2
+              }).last,
+              
+                let fps = (format.videoSupportedFrameRateRanges.sorted { return $0.maxFrameRate < $1.maxFrameRate }.last) else {
+            return
+        }
+        
+        cameraVideoCapturer?.startCapture(with: frontCamera,
+                                          format: format,
+                                          fps: Int(fps.maxFrameRate))
+    }
+    
+    func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {
+        print("peerConnection didRemove stream: \(stream)")
+        let videoTracks = peerConnection.transceivers.compactMap { transceiver -> RTCVideoTrack? in
+            guard transceiver.mediaType == .video else {
+                return nil
+            }
+            return transceiver.receiver.track as? RTCVideoTrack
+        }
+        print(videoTracks)
     }
     
     func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
